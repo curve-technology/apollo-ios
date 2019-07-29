@@ -87,9 +87,12 @@ public class HTTPNetworkTransport: NetworkTransport {
               configuration: URLSessionConfiguration = .default,
               sendOperationIdentifiers: Bool = false,
               useGETForQueries: Bool = false,
-              delegate: HTTPNetworkTransportDelegate? = nil) {
+              delegate: HTTPNetworkTransportDelegate? = nil,
+              urlSessionDelegate: URLSessionDelegate? = nil,
+              urlSessionDelegateQueue: OperationQueue? = nil
+              ) {
     self.url = url
-    self.session = URLSession(configuration: configuration)
+    self.session = URLSession(configuration: configuration, delegate: urlSessionDelegate, delegateQueue: urlSessionDelegateQueue)
     self.sendOperationIdentifiers = sendOperationIdentifiers
     self.useGETForQueries = useGETForQueries
     self.delegate = delegate
