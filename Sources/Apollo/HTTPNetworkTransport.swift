@@ -232,7 +232,7 @@ public class HTTPNetworkTransport: NetworkTransport {
   private func createRequest<Operation: GraphQLOperation>(for operation: Operation, headers: [String: String]?) throws -> URLRequest {
     let body = requestBody(for: operation)
     var request = URLRequest(url: self.url)
-    headers?.forEach{ request.setValue($0.key, forHTTPHeaderField: $0.value) }
+    headers?.forEach{ request.setValue($0.value, forHTTPHeaderField: $0.key) }
     
     if self.useGETForQueries && operation.operationType == .query {
       let transformer = GraphQLGETTransformer(body: body, url: self.url)
