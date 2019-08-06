@@ -106,10 +106,10 @@ public class HTTPNetworkTransport: NetworkTransport {
   ///   - response: The response received from the server, or `nil` if an error occurred.
   ///   - error: An error that indicates why a request failed, or `nil` if the request was succesful.
   /// - Returns: An object that can be used to cancel an in progress request.
-  public func send<Operation>(operation: Operation, completionHandler: @escaping (_ response: GraphQLResponse<Operation>?, _ error: Error?) -> Void) -> Cancellable {
+  public func send<Operation>(operation: Operation, headers: [String : String]? = nil, completionHandler: @escaping (_ response: GraphQLResponse<Operation>?, _ error: Error?) -> Void) -> Cancellable {
     let request: URLRequest
     do {
-      request = try self.createRequest(for: operation)
+      request = try self.createRequest(for: operation, headers: headers)
     } catch {
       completionHandler(nil, error)
       return EmptyCancellable()
@@ -123,6 +123,7 @@ public class HTTPNetworkTransport: NetworkTransport {
 
       if let receivedError = error {
         self?.handleErrorOrRetry(operation: operation,
+                                 headers: headers,
                                  error: receivedError,
                                  for: request,
                                  response: response,
@@ -139,6 +140,7 @@ public class HTTPNetworkTransport: NetworkTransport {
                                                          response: httpResponse,
                                                          kind: .errorResponse)
         self?.handleErrorOrRetry(operation: operation,
+                                 headers: headers,
                                  error: unsuccessfulError,
                                  for: request,
                                  response: response,
@@ -151,6 +153,7 @@ public class HTTPNetworkTransport: NetworkTransport {
                                              response: httpResponse,
                                              kind: .invalidResponse)
         self?.handleErrorOrRetry(operation: operation,
+                                 headers: headers,
                                  error: error,
                                  for: request,
                                  response: response,
@@ -166,6 +169,7 @@ public class HTTPNetworkTransport: NetworkTransport {
         completionHandler(response, nil)
       } catch let parsingError {
         self?.handleErrorOrRetry(operation: operation,
+                                 headers: headers,
                                  error: parsingError,
                                  for: request,
                                  response: response,
@@ -181,6 +185,7 @@ public class HTTPNetworkTransport: NetworkTransport {
   private let sendOperationIdentifiers: Bool
   
   private func handleErrorOrRetry<Operation>(operation: Operation,
+                                             headers: [String: String]? = nil,
                                              error: Error,
                                              for request: URLRequest,
                                              response: URLResponse?,
@@ -203,7 +208,7 @@ public class HTTPNetworkTransport: NetworkTransport {
           return
         }
         
-        _ = self?.send(operation: operation, completionHandler: completionHandler)
+        _ = self?.send(operation: operation, headers: headers, completionHandler: completionHandler)
     })
   }
   
@@ -224,9 +229,10 @@ public class HTTPNetworkTransport: NetworkTransport {
                                   error: error)
   }
   
-  private func createRequest<Operation: GraphQLOperation>(for operation: Operation) throws -> URLRequest {
+  private func createRequest<Operation: GraphQLOperation>(for operation: Operation, headers: [String: String]?) throws -> URLRequest {
     let body = requestBody(for: operation)
     var request = URLRequest(url: self.url)
+    headers?.forEach{ request.setValue($0.value, forHTTPHeaderField: $0.key) }
     
     if self.useGETForQueries && operation.operationType == .query {
       let transformer = GraphQLGETTransformer(body: body, url: self.url)
