@@ -4,6 +4,7 @@ import Apollo
 
 
 public class SplitNetworkTransport: NetworkTransport {
+    
   private let httpNetworkTransport: NetworkTransport
   private let webSocketNetworkTransport: NetworkTransport
   
@@ -12,11 +13,11 @@ public class SplitNetworkTransport: NetworkTransport {
     self.webSocketNetworkTransport = webSocketNetworkTransport
   }
   
-  public func send<Operation>(operation: Operation, completionHandler: @escaping (GraphQLResponse<Operation>?, Error?) -> Void) -> Cancellable {
+    public func send<Operation>(operation: Operation, headers: [String : String]?, completionHandler: @escaping (GraphQLResponse<Operation>?, Error?) -> Void) -> Cancellable {
     if operation.operationType == .subscription {
-        return webSocketNetworkTransport.send(operation: operation, completionHandler: completionHandler)
+        return webSocketNetworkTransport.send(operation: operation, headers: headers, completionHandler: completionHandler)
     } else {
-        return httpNetworkTransport.send(operation: operation, completionHandler: completionHandler)
+        return httpNetworkTransport.send(operation: operation, headers: headers, completionHandler: completionHandler)
     }
   }
 }
