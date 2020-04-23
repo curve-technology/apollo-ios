@@ -29,6 +29,7 @@ public protocol ApolloClientProtocol: class {
   func fetch<Query: GraphQLQuery>(query: Query,
                                   cachePolicy: CachePolicy,
                                   context: UnsafeMutableRawPointer?,
+                                  headers: [String: String]?,
                                   queue: DispatchQueue,
                                   resultHandler: GraphQLResultHandler<Query.Data>?) -> Cancellable
 
@@ -55,6 +56,7 @@ public protocol ApolloClientProtocol: class {
   ///   - resultHandler: An optional closure that is called when mutation results are available or when an error occurs.
   /// - Returns: An object that can be used to cancel an in progress mutation.
   func perform<Mutation: GraphQLMutation>(mutation: Mutation,
+                                          headers: [String: String]?,
                                           context: UnsafeMutableRawPointer?,
                                           queue: DispatchQueue,
                                           resultHandler: GraphQLResultHandler<Mutation.Data>?) -> Cancellable
@@ -84,6 +86,7 @@ public protocol ApolloClientProtocol: class {
   ///   - resultHandler: An optional closure that is called when mutation results are available or when an error occurs.
   /// - Returns: An object that can be used to cancel an in progress subscription.
   func subscribe<Subscription: GraphQLSubscription>(subscription: Subscription,
+                                                    headers: [String: String]?,
                                                     queue: DispatchQueue,
                                                     resultHandler: @escaping GraphQLResultHandler<Subscription.Data>) -> Cancellable
 }

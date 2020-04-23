@@ -127,7 +127,7 @@ public class HTTPNetworkTransport {
   ///   - enableAutoPersistedQueries: Whether to send persistedQuery extension. QueryDocument will be absent at 1st request, retry with QueryDocument if server respond PersistedQueryNotFound or PersistedQueryNotSupport. Defaults to false.
   ///   - useGETForPersistedQueryRetry: Whether to retry persistedQuery request with HttpGetMethod. Defaults to false.
   public init(url: URL,
-              session: URLSession = .shared,
+              configuration: URLSessionConfiguration = .default,
               sendOperationIdentifiers: Bool = false,
               useGETForQueries: Bool = false,
               delegate: HTTPNetworkTransportDelegate? = nil,
@@ -476,8 +476,9 @@ public class HTTPNetworkTransport {
 
 extension HTTPNetworkTransport: NetworkTransport {
 
-  public func send<Operation: GraphQLOperation>(operation: Operation, completionHandler: @escaping (_ result: Result<GraphQLResponse<Operation.Data>, Error>) -> Void) -> Cancellable {
+  public func send<Operation: GraphQLOperation>(operation: Operation, headers: [String: String]? = nil, completionHandler: @escaping (_ result: Result<GraphQLResponse<Operation.Data>, Error>) -> Void) -> Cancellable {
     return send(operation: operation,
+                headers: headers,
                 isPersistedQueryRetry: false,
                 files: nil,
                 completionHandler: completionHandler)

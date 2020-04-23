@@ -64,10 +64,11 @@ public class ApolloClient {
   }
 
   fileprivate func send<Operation: GraphQLOperation>(operation: Operation,
+                                                     headers: [String: String]? = nil,
                                                      shouldPublishResultToStore: Bool,
                                                      context: UnsafeMutableRawPointer?,
                                                      resultHandler: @escaping GraphQLResultHandler<Operation.Data>) -> Cancellable {
-    return networkTransport.send(operation: operation) { [weak self] result in
+    return networkTransport.send(operation: operation, headers: headers) { [weak self] result in
       guard let self = self else {
         return
       }
