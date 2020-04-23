@@ -2,22 +2,64 @@
 import Apollo
 #endif
 
-
-public class SplitNetworkTransport: NetworkTransport {
-    
-  private let httpNetworkTransport: NetworkTransport
+/// A network transport that sends subscriptions using one `NetworkTransport` and other requests using another `NetworkTransport`. Ideal for sending subscriptions via a web socket but everything else via HTTP.
+public class SplitNetworkTransport {
+  private let httpNetworkTransport: UploadingNetworkTransport
   private let webSocketNetworkTransport: NetworkTransport
+
+  public var clientName: String {
+    let httpName = self.httpNetworkTransport.clientName
+    let websocketName = self.webSocketNetworkTransport.clientName
+    if httpName == websocketName {
+      return httpName
+    } else {
+      return "SPLIT_HTTPNAME_\(httpName)_WEBSOCKETNAME_\(websocketName)"
+    }
+  }
+
+  public var clientVersion: String {
+    let httpVersion = self.httpNetworkTransport.clientVersion
+    let websocketVersion = self.webSocketNetworkTransport.clientVersion
+    if httpVersion == websocketVersion {
+      return httpVersion
+    } else {
+      return "SPLIT_HTTPVERSION_\(httpVersion)_WEBSOCKETVERSION_\(websocketVersion)"
+    }
+  }
   
-  public init(httpNetworkTransport: NetworkTransport, webSocketNetworkTransport: NetworkTransport) {
+  /// Designated initializer
+  ///
+  /// - Parameters:
+  ///   - httpNetworkTransport: An `UploadingNetworkTransport` to use for non-subscription requests. Should generally be a `HTTPNetworkTransport` or something similar.
+  ///   - webSocketNetworkTransport: A `NetworkTransport` to use for subscription requests. Should generally be a `WebSocketTransport` or something similar.
+  public init(httpNetworkTransport: UploadingNetworkTransport, webSocketNetworkTransport: NetworkTransport) {
     self.httpNetworkTransport = httpNetworkTransport
     self.webSocketNetworkTransport = webSocketNetworkTransport
   }
-  
-    public func send<Operation>(operation: Operation, headers: [String : String]?, completionHandler: @escaping (GraphQLResponse<Operation>?, Error?) -> Void) -> Cancellable {
+}
+
+// MARK: - NetworkTransport conformance
+
+extension SplitNetworkTransport: NetworkTransport {
+
+  public func send<Operation: GraphQLOperation>(operation: Operation, headers: [String : String]?, completionHandler: @escaping (Result<GraphQLResponse<Operation.Data>, Error>) -> Void) -> Cancellable {
     if operation.operationType == .subscription {
-        return webSocketNetworkTransport.send(operation: operation, headers: headers, completionHandler: completionHandler)
+      return webSocketNetworkTransport.send(operation: operation, headers: headers, completionHandler: completionHandler)
     } else {
-        return httpNetworkTransport.send(operation: operation, headers: headers, completionHandler: completionHandler)
+      return httpNetworkTransport.send(operation: operation, headers: headers, completionHandler: completionHandler)
     }
+  }
+}
+
+// MARK: - UploadingNetworkTransport conformance
+
+extension SplitNetworkTransport: UploadingNetworkTransport {
+
+  public func upload<Operation: GraphQLOperation>(operation: Operation,
+                                                  files: [GraphQLFile],
+                                                  completionHandler: @escaping (_ result: Result<GraphQLResponse<Operation.Data>, Error>) -> Void) -> Cancellable {
+    return httpNetworkTransport.upload(operation: operation,
+                                       files: files,
+                                       completionHandler: completionHandler)
   }
 }

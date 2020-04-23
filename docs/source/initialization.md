@@ -7,14 +7,14 @@ title: Creating a client
 In most cases, you'll want to create a single shared instance of `ApolloClient` and point it at your GraphQL server. The easiest way to do this is to create a singleton:
 
 ```swift
-class Apollo {
-  static let shared = Apollo() 
+class Network {
+  static let shared = Network() 
     
-  private(set) lazy var client = ApolloClient(url: URL(string: "http://localhost:8080/graphql")!)
+  private(set) lazy var apollo = ApolloClient(url: URL(string: "http://localhost:8080/graphql")!)
 }
 ```
 
-Under the hood, this will create a client using `HTTPNetworkTransport` with a default configuration. You can then use this client from anywhere in your code with `Apollo.shared.client`. 
+Under the hood, this will create a client using `HTTPNetworkTransport` with a default configuration. You can then use this client from anywhere in your code with `Network.shared.apollo`. 
 
 ## Advanced Client Creation
 
@@ -35,7 +35,7 @@ The available implementations are:
 
 The initializer for `HTTPNetworkTransport` has several properties which can allow you to get better information and finer-grained control of your HTTP requests and responses:
 
-- `configuration` allows you to pass in a custom `URLSessionConfiguration` to set up anything which needs to be done for every single request without alteration. This defaults to `URLSessionConfiguration.default`. 
+- `session` allows you to pass in a custom `URLSession` to set up anything which needs to be done for every single request without alteration. This defaults to `URLSession.shared`. 
 - `sendOperationIdentifiers` allows you send operation identifiers along with your requests. **NOTE:** To send operation identifiers, Apollo types must be generated with `operationIdentifier`s or sending data will crash. Due to this restriction, this option defaults to `false`.
 - `useGETForQueries` sends all requests of `query` type using `GET` instead of `POST`. This defaults to `false` to preserve existing behavior in older versions of the client. 
 - `delegate` Can conform to one or many of several sub-protocols for `HTTPNetworkTransportDelegate`, detailed below.
@@ -74,30 +74,34 @@ When you decide to retry, the `send` operation for your `GraphQLOperation` will 
 
 ### Example Advanced Client Setup
 
-Here's a sample of a singleton using an advanced client which handles all three sub-protocols. This code assumes you've got the following external classes: 
+Here's a sample of a singleton using an advanced client which handles all three sub-protocols. This code assumes you've got the following classes in your own code (these are **not** part of the Apollo library): 
 
 - **`UserManager`** to check whether the user is logged in, perform associated checks on errors and responses to see if they need to reauthenticate, and perform reauthentication
 - **`Logger`** to handle printing logs based on their level, and which supports `.debug`, `.error`, or `.always` log levels.
 
 ```swift
+import Foundation
+import Apollo
+
 // MARK: - Singleton Wrapper
 
-class Apollo {
-  static let shared = Apollo() 
+class Network {
+  static let shared = Network() 
   
   // Configure the network transport to use the singleton as the delegate. 
-  private lazy var networkTransport = HTTPNetworkTransport(
-    url: URL(string: "http://localhost:8080/graphql")!,
-    delegate: self
-  )
+  private lazy var networkTransport: HTTPNetworkTransport = {
+    let transport = HTTPNetworkTransport(url: URL(string: "http://localhost:8080/graphql")!)
+    transport.delegate = self
+    return transport
+  }()
     
-  // Use the configured network transport in your client.
-  private(set) lazy var client = ApolloClient(networkTransport: self.networkTransport)
+  // Use the configured network transport in your Apollo client.
+  private(set) lazy var apollo = ApolloClient(networkTransport: self.networkTransport)
 }
 
 // MARK: - Pre-flight delegate 
 
-extension Apollo: HTTPNetworkTransportPreflightDelegate {
+extension Network: HTTPNetworkTransportPreflightDelegate {
 
   func networkTransport(_ networkTransport: HTTPNetworkTransport, 
                           shouldSend request: URLRequest) -> Bool {
@@ -109,13 +113,13 @@ extension Apollo: HTTPNetworkTransportPreflightDelegate {
                         willSend request: inout URLRequest) {
                         
     // Get the existing headers, or create new ones if they're nil
-    var headers = request.allHTTPHeaders ?? [String: String]()
+    var headers = request.allHTTPHeaderFields ?? [String: String]()
 
     // Add any new headers you need
-    headers["Authentication"] = "Bearer \(UserManager.shared.currentAuthToken)"
+    headers["Authorization"] = "Bearer \(UserManager.shared.currentAuthToken)"
   
     // Re-assign the updated headers to the request.
-    request.headers = headers
+    request.allHTTPHeaderFields = headers
     
     Logger.log(.debug, "Outgoing request: \(request)")
   }
@@ -123,7 +127,7 @@ extension Apollo: HTTPNetworkTransportPreflightDelegate {
 
 // MARK: - Task Completed Delegate
 
-extension Apollo: HTTPNetworkTransportTaskCompletedDelegate {
+extension Network: HTTPNetworkTransportTaskCompletedDelegate {
   func networkTransport(_ networkTransport: HTTPNetworkTransport,
                         didCompleteRawTaskForRequest request: URLRequest,
                         withData data: Data?,
@@ -151,24 +155,33 @@ extension Apollo: HTTPNetworkTransportTaskCompletedDelegate {
 
 // MARK: - Retry Delegate
 
-extension Apollo: HTTPNetworkTransportRetryDelegate {
+extension Network: HTTPNetworkTransportRetryDelegate {
 
   func networkTransport(_ networkTransport: HTTPNetworkTransport,
                         receivedError error: Error,
                         for request: URLRequest,
                         response: URLResponse?,
-                        retryHandler: @escaping (_ shouldRetry: Bool) -> Void) {
+                        continueHandler: @escaping (_ action: HTTPNetworkTransport.ContinueAction) -> Void) {
     // Check if the error and/or response you've received are something that requires authentication
     guard UserManager.shared.requiresReAuthentication(basedOn: error, response: response) else {
       // This is not something this application can handle, do not retry.
-      shouldRetry(false)
+      continueHandler(.fail(error))
+      return
     }
     
     // Attempt to re-authenticate asynchronously
-    UserManager.shared.reAuthenticate { success in 
+    UserManager.shared.reAuthenticate { (reAuthenticateError: Error?) in 
       // If re-authentication succeeded, try again. If it didn't, don't.
-      shouldRetry(success)
+      if let reAuthenticateError = reAuthenticateError {
+        continueHandler(.fail(reAuthenticateError)) // Will return re authenticate error to query callback 
+        // or (depending what error you want to get to callback)
+        continueHandler(.fail(error)) // Will return original error
+      } else {
+        continueHandler(.retry)
+      }
     }
   }
 }
 ```
+
+An example of setting up a client which can handle web sockets and subscriptions is included in the [subscription documentation](subscriptions/#sample-subscription-supporting-initializer). 
